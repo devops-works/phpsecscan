@@ -31,7 +31,7 @@ func TestCheckSpec(t *testing.T) {
 		{"1.89", false},
 	}
 
-	testdb := database.New()
+	testdb := NewDatabase()
 	testdb.AddSpec("foo/bar", ">=1.0", "<1.9")
 
 	for _, tc := range cases {
