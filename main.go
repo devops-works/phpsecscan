@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	flag "github.com/namsral/flag"
 	log "github.com/sirupsen/logrus"
 	git "gopkg.in/libgit2/git2go.v26"
 	yaml "gopkg.in/yaml.v2"
@@ -31,17 +31,15 @@ import (
 //         versions: ['>=5', '<5.3.1']
 // reference: composer://guzzlehttp/guzzle
 
-type fofBranch struct {
-	Time     string   `yaml:"time"`
-	Versions []string `yaml:"versions"`
-}
-
 type fofSecurityAdvisory struct {
-	Title     string               `yaml:"title"`
-	Link      string               `yaml:"link"`
-	CVE       string               `yaml:"cve"`
-	Branches  map[string]fofBranch `yaml:"branches"`
-	Reference string               `yaml:"reference"`
+	Title    string `yaml:"title"`
+	Link     string `yaml:"link"`
+	CVE      string `yaml:"cve"`
+	Branches map[string]struct {
+		Time     string   `yaml:"time"`
+		Versions []string `yaml:"versions"`
+	} `yaml:"branches"`
+	Reference string `yaml:"reference"`
 }
 
 type composerLock struct {
@@ -81,17 +79,16 @@ var sha1 string
 // - cli
 // - web service server
 func main() {
-	// Setup logging
-	setupLogging()
-
 	var err error
-	var help, isServer bool
+	var help, isDebug bool
 	var gitDirectory, serverPort, uri string
+	var syncInterval int
 
 	flag.StringVar(&gitDirectory, "gitdir", "", "Path to store CVE git checkout")
-	flag.BoolVar(&isServer, "server", false, "Set to start a server")
+	flag.BoolVar(&isDebug, "debug", false, "Debug mode")
 	flag.StringVar(&serverPort, "port", "8080", "Server port")
 	flag.StringVar(&uri, "repo", "https://github.com/FriendsOfPHP/security-advisories.git", "CVE repository")
+	flag.IntVar(&syncInterval, "interval", 600, "Interval between CVE repository sync")
 	flag.BoolVar(&help, "help", false, "Help usage")
 	flag.BoolVar(&help, "h", false, "Help usage")
 
@@ -102,9 +99,13 @@ func main() {
 		os.Exit(0)
 	}
 
-	// flag.Usage = func() {
-	// 	fmt.Fprintf(os.Stderr, "This is not helpful.\n")
-	// }
+	// Setup logging
+	if isDebug {
+		setupLogging(log.DebugLevel)
+	} else {
+		setupLogging(log.InfoLevel)
+	}
+
 	// If gitDirectory is not set, get a temporary directory
 	// because we still need to checkkout somewhere
 	// This directory will be removed afterwards
@@ -136,26 +137,45 @@ func main() {
 	// - in memory struct to index CVEs
 	// - mutex to control access to this struct
 
-	if isServer {
-		log.Info("webserver mode")
-		cronsync(gitDirectory, 5*time.Second)
-		webserver(":" + serverPort)
-	} else {
+	if flag.NArg() == 1 {
 		// scan once
-		// TODO: file passed as argument and scan
-		jsonData := []byte(`{"_readme":["This file locks the dependencies of your project to a known state","Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies","This file is @generated automatically"],"content-hash":"65a253e04313f9b5ce326594dfa89789","packages":[{"name":"algatux/influxdb-bundle","version":"2.1.4","source":{"type":"git","url":"https://github.com/Algatux/influxdb-bundle.git","reference":"aa2c9aaef77a5cd5ac9d964c5e4f928a42d51fe6"},"dist":{"type":"zip","url":"https://api.github.com/repos/Algatux/influxdb-bundle/zipball/aa2c9aaef77a5cd5ac9d964c5e4f928a42d51fe6","reference":"aa2c9aaef77a5cd5ac9d964c5e4f928a42d51fe6","shasum":""},"require":{"influxdb/influxdb-php":"^1.2","php":"^7.0","symfony/console":"^2.8 || ^3.0 || ^4.0","symfony/framework-bundle":"^2.8 || ^3.0 || ^4.0"},"conflict":{"symfony/form":"<2.8"},"require-dev":{"matthiasnoback/symfony-dependency-injection-test":"^1.0","symfony/form":"^2.8 || ^3.0 || ^4.0","symfony/phpunit-bridge":"^4.0"},"suggest":{"symfony/form":"Needed for form types usage"},"type":"symfony-bundle","extra":{"branch-alias":{"dev-master":"2.x-dev"}},"autoload":{"psr-4":{"Algatux\\InfluxDbBundle\\":"src/"}},"notification-url":"https://packagist.org/downloads/","license":["MIT"],"authors":[{"name":"Sullivan SENECHAL","email":"soullivaneuh@gmail.com"},{"name":"Alessandro Galli","email":"a.galli85@gmail.com"}],"description":"Bundle service integration of official influxdb/influxdb-php client","keywords":["database","influxdb","symfony"],"time":"2018-02-27T14:11:13+00:00"},{"name":"algolia/algoliasearch-client-php","version":"1.27.0","source":{"type":"git","url":"https://github.com/algolia/algoliasearch-client-php.git","reference":"d4e83cd7756bafff1e1cb2adcbf3c08b974dc263"},"dist":{"type":"zip","url":"https://api.github.com/repos/algolia/algoliasearch-client-php/zipball/d4e83cd7756bafff1e1cb2adcbf3c08b974dc263","reference":"d4e83cd7756bafff1e1cb2adcbf3c08b974dc263","shasum":""},"require":{"ext-curl":"*","ext-mbstring":"*","php":">=5.3"},"require-dev":{"phpunit/phpunit":"^4.8.35 || ^5.7 || ^6.4","satooshi/php-coveralls":"^1.0"},"type":"library","autoload":{"psr-0":{"AlgoliaSearch":"src/"}},"notification-url":"https://packagist.org/downloads/","license":["MIT"],"authors":[{"name":"Algolia Team","email":"contact@algolia.com"},{"name":"Ryan T. Catlin","email":"ryan.catlin@gmail.com"},{"name":"Jonathan H. Wage","email":"jonwage@gmail.com"}],"description":"Algolia Search API Client for PHP","homepage":"https://github.com/algolia/algoliasearch-client-php","time":"2018-06-19T05:59:53+00:00"}],"aliases":[],"minimum-stability":"stable","stability-flags":{"snc/redis-bundle":20,"xsolve-pl/xsolve-cookie-acknowledgement-bundle":20,"yproximite/common":20,"behat/mink":20},"prefer-stable":false,"prefer-lowest":false,"platform":{"php":">=7.2"},"platform-dev":[],"platform-overrides":{"php":"7.2.4"}}`)
+		jsonData, err := ioutil.ReadFile(flag.Arg(0))
+
+		if err != nil {
+			log.Fatalf("unable to open %s: %v", flag.Arg(0), err)
+			os.Exit(1)
+		}
+
+		// jsonData := []byte(`{"_readme":["This file locks the dependencies of your project to a known state","Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies","This file is @generated automatically"],"content-hash":"65a253e04313f9b5ce326594dfa89789","packages":[{"name":"algatux/influxdb-bundle","version":"2.1.4","source":{"type":"git","url":"https://github.com/Algatux/influxdb-bundle.git","reference":"aa2c9aaef77a5cd5ac9d964c5e4f928a42d51fe6"},"dist":{"type":"zip","url":"https://api.github.com/repos/Algatux/influxdb-bundle/zipball/aa2c9aaef77a5cd5ac9d964c5e4f928a42d51fe6","reference":"aa2c9aaef77a5cd5ac9d964c5e4f928a42d51fe6","shasum":""},"require":{"influxdb/influxdb-php":"^1.2","php":"^7.0","symfony/console":"^2.8 || ^3.0 || ^4.0","symfony/framework-bundle":"^2.8 || ^3.0 || ^4.0"},"conflict":{"symfony/form":"<2.8"},"require-dev":{"matthiasnoback/symfony-dependency-injection-test":"^1.0","symfony/form":"^2.8 || ^3.0 || ^4.0","symfony/phpunit-bridge":"^4.0"},"suggest":{"symfony/form":"Needed for form types usage"},"type":"symfony-bundle","extra":{"branch-alias":{"dev-master":"2.x-dev"}},"autoload":{"psr-4":{"Algatux\\InfluxDbBundle\\":"src/"}},"notification-url":"https://packagist.org/downloads/","license":["MIT"],"authors":[{"name":"Sullivan SENECHAL","email":"soullivaneuh@gmail.com"},{"name":"Alessandro Galli","email":"a.galli85@gmail.com"}],"description":"Bundle service integration of official influxdb/influxdb-php client","keywords":["database","influxdb","symfony"],"time":"2018-02-27T14:11:13+00:00"},{"name":"algolia/algoliasearch-client-php","version":"1.27.0","source":{"type":"git","url":"https://github.com/algolia/algoliasearch-client-php.git","reference":"d4e83cd7756bafff1e1cb2adcbf3c08b974dc263"},"dist":{"type":"zip","url":"https://api.github.com/repos/algolia/algoliasearch-client-php/zipball/d4e83cd7756bafff1e1cb2adcbf3c08b974dc263","reference":"d4e83cd7756bafff1e1cb2adcbf3c08b974dc263","shasum":""},"require":{"ext-curl":"*","ext-mbstring":"*","php":">=5.3"},"require-dev":{"phpunit/phpunit":"^4.8.35 || ^5.7 || ^6.4","satooshi/php-coveralls":"^1.0"},"type":"library","autoload":{"psr-0":{"AlgoliaSearch":"src/"}},"notification-url":"https://packagist.org/downloads/","license":["MIT"],"authors":[{"name":"Algolia Team","email":"contact@algolia.com"},{"name":"Ryan T. Catlin","email":"ryan.catlin@gmail.com"},{"name":"Jonathan H. Wage","email":"jonwage@gmail.com"}],"description":"Algolia Search API Client for PHP","homepage":"https://github.com/algolia/algoliasearch-client-php","time":"2018-06-19T05:59:53+00:00"}],"aliases":[],"minimum-stability":"stable","stability-flags":{"snc/redis-bundle":20,"xsolve-pl/xsolve-cookie-acknowledgement-bundle":20,"yproximite/common":20,"behat/mink":20},"prefer-stable":false,"prefer-lowest":false,"platform":{"php":">=7.2"},"platform-dev":[],"platform-overrides":{"php":"7.2.4"}}`)
 
 		// var v interface{}
 		var v composerLock
 		json.Unmarshal(jsonData, &v)
 
 		for _, val := range v.Packages {
-			fmt.Println("package ", val.Name, "(version: ", val.Version, ")")
+			status, err := database.Vulnerable(val.Name, val.Version)
+
+			log.Debugf("package %s (%s) is %t\n", val.Name, val.Version, status)
+
+			if err != nil {
+				log.Warnf("got error checking %s: %v\n", val.Name, err)
+				continue
+			}
+
+			if status == true {
+				fmt.Printf("package %s (%s) is vulnerable\n", val.Name, val.Version)
+			}
 		}
+
+		os.Exit(0)
 	}
+
+	log.Info("webserver mode")
+	cronsync(gitDirectory, time.Duration(syncInterval)*time.Second)
+	webserver(":" + serverPort)
 }
 
-func setupLogging() {
+func setupLogging(level log.Level) {
 	// Formatter
 	customFormatter := new(log.TextFormatter)
 	customFormatter.TimestampFormat = "2006-01-02 15:04:05"
@@ -163,7 +183,7 @@ func setupLogging() {
 	customFormatter.FullTimestamp = true
 
 	// Only log the warning severity or above.
-	log.SetLevel(log.DebugLevel)
+	log.SetLevel(level)
 }
 
 func webserver(port string) {
@@ -234,13 +254,10 @@ func checkHandler(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(message))
 		}
 	}
-
-	return
-
 }
 
-func cronsync(where string, delay time.Duration) {
-	ticker := time.NewTicker(delay)
+func cronsync(where string, interval time.Duration) {
+	ticker := time.NewTicker(interval)
 	quit := make(chan struct{})
 
 	log.Infof("initial sync in %s", where)
@@ -250,7 +267,7 @@ func cronsync(where string, delay time.Duration) {
 		log.Errorf("unable to sync repo: %v", err)
 	}
 
-	log.Info("starting sync routine")
+	log.Infof("lauching sync routine every %d secs", interval/time.Second)
 
 	go func() {
 		for {
@@ -278,7 +295,6 @@ func fetchRepo(where string) error {
 		RemoteCallbacks: git.RemoteCallbacks{},
 	}
 
-	//  func (o *Remote) Fetch(refspecs []string, opts *FetchOptions, msg string) error
 	repo, err := git.OpenRepository(where)
 	remote, err := repo.Remotes.Lookup("origin")
 	err = remote.Fetch([]string{}, cloneOptions.FetchOptions, "")
@@ -366,8 +382,6 @@ func createDb(repos string) (*vulnDatabase, error) {
 		return nil, err
 	}
 
-	var dec fofSecurityAdvisory
-
 	for _, file := range fileList {
 		f, err := os.Open(file)
 		if err != nil {
@@ -377,6 +391,8 @@ func createDb(repos string) (*vulnDatabase, error) {
 
 		log.Debugf("parsing file %s", file)
 
+		var dec fofSecurityAdvisory
+
 		decoder := yaml.NewDecoder(f)
 		err = decoder.Decode(&dec)
 
@@ -384,19 +400,11 @@ func createDb(repos string) (*vulnDatabase, error) {
 			return nil, err
 		}
 
-		log.Printf("%v\n", dec)
-
 		for _, v := range dec.Branches {
 			key := strings.Replace(dec.Reference, "composer://", "", 1)
 
-			low := v.Versions[0]
-			high := ""
-
-			if len(v.Versions) > 1 {
-				high = v.Versions[1]
-			}
-			log.Debugf("adding versions (%s,%s) for %s", low, high, key)
-			db.AddSpec(key, low, high)
+			log.Debugf("adding versions %v for %s", v.Versions, key)
+			db.AddSpec(key, v.Versions)
 		}
 	}
 

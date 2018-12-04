@@ -1,14 +1,16 @@
 package main
 
 import (
+	"strings"
 	"sync"
+
+	log "github.com/sirupsen/logrus"
 
 	version "github.com/hashicorp/go-version"
 )
 
 type versionSpecs struct {
-	lower string
-	upper string
+	constraint string
 }
 
 type vulnSpec []versionSpecs
@@ -26,16 +28,18 @@ func NewDatabase() *vulnDatabase {
 }
 
 // AddSpec adds vulnerable version bounds for a package
-func (db *vulnDatabase) AddSpec(key, lower, upper string) {
+func (db *vulnDatabase) AddSpec(key string, constraint []string) {
 	db.Lock()
 	defer db.Unlock()
+
+	log.Debugf("adding spec for %s: %v", key, constraint)
 
 	// If package is unknown, create it's structure
 	if _, ok := db.specs[key]; !ok {
 		db.specs[key] = vulnSpec{}
 	}
 
-	db.specs[key] = append(db.specs[key], versionSpecs{lower, upper})
+	db.specs[key] = append(db.specs[key], versionSpecs{strings.Join(constraint, ",")})
 }
 
 // Vulnerable returns true if package is vulnerable, false otherwise.
@@ -54,14 +58,7 @@ func (db *vulnDatabase) Vulnerable(pkg, vrs string) (bool, error) {
 	}
 
 	for _, sp := range db.specs[pkg] {
-		low := sp.lower
-		high := sp.upper
-
-		if low == "" {
-			low = ">=0.0"
-		}
-
-		constraints, err := version.NewConstraint(low + ", " + high)
+		constraints, err := version.NewConstraint(sp.constraint)
 
 		if err != nil {
 			return true, err

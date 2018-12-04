@@ -1,2 +1,4 @@
 phpsecscan
 .vscode/tags
+app.yaml
+.gcloudignore

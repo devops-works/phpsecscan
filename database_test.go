@@ -1,12 +1,15 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestAddSpec tests that we can add items to a database
 func TestAddSpec(t *testing.T) {
 	testdb := NewDatabase()
 
-	testdb.AddSpec("foo/bar", ">=1.0", "<1.9")
+	testdb.AddSpec("foo/bar", []string{">=1.0", "<1.9"})
 
 	if len(testdb.specs) != 1 {
 		t.Error("wrong db size after element has been added")
@@ -16,25 +19,27 @@ func TestAddSpec(t *testing.T) {
 
 func TestCheckSpec(t *testing.T) {
 	cases := []struct {
-		version  string
-		expected bool
+		constraint string
+		version    string
+		expected   bool
 	}{
-		{"0.9999", false},
-		{"1.0", true},
-		{"1.2.3", true},
-		// {"1.2.3.4-rc1-with-hypen", true},
-		// {"v1.8rc2", true},
-		{"1.8", true},
-		// {"v1.9rc2", true},
-		// {"1.9rc2", true},
-		{"1.9", false},
-		{"1.89", false},
+		{">=1.0,<1.9", "0.9999", false},
+		{">=1.0,<1.9", "1.0", true},
+		{">=1.0,<1.9", "1.2.3", true},
+		// { ">=1.0,<1.9", "1.2.3.4-rc1-with-hypen", true},
+		// { ">=1.0,<1.9", "v1.8rc2", true},
+		{">=1.0,<1.9", "1.8", true},
+		// { ">=1.0,<1.9", "v1.9rc2", true},
+		// { ">=1.0,<1.9", "1.9rc2", true},
+		{">=1.0,<1.9", "1.9", false},
+		{">=1.0,<1.9", "1.89", false},
+		{"<1.9", "1.8", true},
+		{"<1.9", "1.9", false},
 	}
 
-	testdb := NewDatabase()
-	testdb.AddSpec("foo/bar", ">=1.0", "<1.9")
-
 	for _, tc := range cases {
+		testdb := NewDatabase()
+		testdb.AddSpec("foo/bar", strings.Split(tc.constraint, ","))
 		vuln, err := testdb.Vulnerable("foo/bar", tc.version)
 		// t.Logf("version %s is %t", tc.version, vuln)
 		if err != nil {
