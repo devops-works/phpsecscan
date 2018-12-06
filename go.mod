@@ -6,5 +6,6 @@ require (
 	github.com/sirupsen/logrus v1.2.0
 	gopkg.in/libgit2/git2go.v25 v25.0.0-20170120134632-334260d743d7
 	gopkg.in/libgit2/git2go.v26 v26.0.0-20181007165906-ef5cc6bc2959
+	gopkg.in/src-d/go-git.v4 v4.8.1
 	gopkg.in/yaml.v2 v2.2.1
 )

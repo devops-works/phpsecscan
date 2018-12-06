@@ -12,24 +12,11 @@ import (
 
 	flag "github.com/namsral/flag"
 	log "github.com/sirupsen/logrus"
-	git "gopkg.in/libgit2/git2go.v26"
+	git "gopkg.in/src-d/go-git.v4"
+
+	// git "gopkg.in/libgit2/git2go.v26"
 	yaml "gopkg.in/yaml.v2"
 )
-
-// title:     HTTP Proxy header vulnerability
-// link:      https://github.com/guzzle/guzzle/releases/tag/6.2.1
-// cve:       CVE-2016-5385
-// branches:
-//     master:
-//         time:     2015-07-15 17:14:23
-//         versions: ['>=6', '<6.2.1']
-//     4.x:
-//         time:     2015-07-15 17:36:08
-//         versions: ['>=4.0.0-rc2', '<4.2.4']
-//     "5.3":
-//         time:     2015-07-15 19:28:39
-//         versions: ['>=5', '<5.3.1']
-// reference: composer://guzzlehttp/guzzle
 
 // FoFSecurityAdvisory holds a FriendsOfSymfony advisory
 type FoFSecurityAdvisory struct {
@@ -131,45 +118,18 @@ func main() {
 		log.Fatalf("unable to create database: %v", err)
 	}
 
-	// create a goroutine that periodically syncs
-	// go run sync() every X
-
-	// we'll need a:
-	// - in memory struct to index CVEs
-	// - mutex to control access to this struct
-
+	// Single run mode
 	if flag.NArg() == 1 {
-		// scan once
-		jsonData, err := ioutil.ReadFile(flag.Arg(0))
+		log.Info("single run mode")
+
+		err = fetchRepo(gitDirectory)
 
 		if err != nil {
-			log.Fatalf("unable to open %s: %v", flag.Arg(0), err)
-			os.Exit(1)
+			log.Errorf("unable to sync repo: %v", err)
 		}
 
-		// jsonData := []byte(`{"_readme":["This file locks the dependencies of your project to a known state","Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies","This file is @generated automatically"],"content-hash":"65a253e04313f9b5ce326594dfa89789","packages":[{"name":"algatux/influxdb-bundle","version":"2.1.4","source":{"type":"git","url":"https://github.com/Algatux/influxdb-bundle.git","reference":"aa2c9aaef77a5cd5ac9d964c5e4f928a42d51fe6"},"dist":{"type":"zip","url":"https://api.github.com/repos/Algatux/influxdb-bundle/zipball/aa2c9aaef77a5cd5ac9d964c5e4f928a42d51fe6","reference":"aa2c9aaef77a5cd5ac9d964c5e4f928a42d51fe6","shasum":""},"require":{"influxdb/influxdb-php":"^1.2","php":"^7.0","symfony/console":"^2.8 || ^3.0 || ^4.0","symfony/framework-bundle":"^2.8 || ^3.0 || ^4.0"},"conflict":{"symfony/form":"<2.8"},"require-dev":{"matthiasnoback/symfony-dependency-injection-test":"^1.0","symfony/form":"^2.8 || ^3.0 || ^4.0","symfony/phpunit-bridge":"^4.0"},"suggest":{"symfony/form":"Needed for form types usage"},"type":"symfony-bundle","extra":{"branch-alias":{"dev-master":"2.x-dev"}},"autoload":{"psr-4":{"Algatux\\InfluxDbBundle\\":"src/"}},"notification-url":"https://packagist.org/downloads/","license":["MIT"],"authors":[{"name":"Sullivan SENECHAL","email":"soullivaneuh@gmail.com"},{"name":"Alessandro Galli","email":"a.galli85@gmail.com"}],"description":"Bundle service integration of official influxdb/influxdb-php client","keywords":["database","influxdb","symfony"],"time":"2018-02-27T14:11:13+00:00"},{"name":"algolia/algoliasearch-client-php","version":"1.27.0","source":{"type":"git","url":"https://github.com/algolia/algoliasearch-client-php.git","reference":"d4e83cd7756bafff1e1cb2adcbf3c08b974dc263"},"dist":{"type":"zip","url":"https://api.github.com/repos/algolia/algoliasearch-client-php/zipball/d4e83cd7756bafff1e1cb2adcbf3c08b974dc263","reference":"d4e83cd7756bafff1e1cb2adcbf3c08b974dc263","shasum":""},"require":{"ext-curl":"*","ext-mbstring":"*","php":">=5.3"},"require-dev":{"phpunit/phpunit":"^4.8.35 || ^5.7 || ^6.4","satooshi/php-coveralls":"^1.0"},"type":"library","autoload":{"psr-0":{"AlgoliaSearch":"src/"}},"notification-url":"https://packagist.org/downloads/","license":["MIT"],"authors":[{"name":"Algolia Team","email":"contact@algolia.com"},{"name":"Ryan T. Catlin","email":"ryan.catlin@gmail.com"},{"name":"Jonathan H. Wage","email":"jonwage@gmail.com"}],"description":"Algolia Search API Client for PHP","homepage":"https://github.com/algolia/algoliasearch-client-php","time":"2018-06-19T05:59:53+00:00"}],"aliases":[],"minimum-stability":"stable","stability-flags":{"snc/redis-bundle":20,"xsolve-pl/xsolve-cookie-acknowledgement-bundle":20,"yproximite/common":20,"behat/mink":20},"prefer-stable":false,"prefer-lowest":false,"platform":{"php":">=7.2"},"platform-dev":[],"platform-overrides":{"php":"7.2.4"}}`)
-
-		// var v interface{}
-		var v composerLock
-		json.Unmarshal(jsonData, &v)
-
-		for _, val := range v.Packages {
-			advisories, err := database.Vulnerable(val.Name, val.Version)
-
-			if err != nil {
-				log.Warnf("got error checking %s: %v\n", val.Name, err)
-				continue
-			}
-
-			if len(advisories) > 0 {
-				fmt.Printf("package %s (%s) is vulnerable\n", val.Name, val.Version)
-				for _, adv := range advisories {
-					fmt.Printf("\t%s (%s)\n", adv.CVE, adv.Link)
-					// for _, br := range adv.Branches {
-					// 	fmt.Printf("\t\tversion %s\n", strings.Join(br.Versions, ","))
-					// }
-				}
-			}
+		if fileIsVulnerable(flag.Arg(0)) {
+			os.Exit(1)
 		}
 
 		os.Exit(0)
@@ -276,12 +236,44 @@ func checkHandler(w http.ResponseWriter, r *http.Request) {
 		// We have vulnerabilities
 		// So remove the trailing ',' for the last iteration and enclose vulnerabilities list
 		response = response[:len(response)-1]
-		response = `{  "vulnerable": true, "vulnerabilities": [ ` + response + ` ] }`
+		response = `{  "vulnerable": true, "version": "` + sha1 + `", "vulnerabilities": [ ` + response + ` ] }`
 	} else {
-		response = `{ "vulnerable": false }`
+		response = `{ "vulnerable": false, "version": "` + sha1 + `" }`
 	}
 
 	w.Write([]byte(response))
+}
+
+func fileIsVulnerable(file string) bool {
+	vulnerable := false
+	jsonData, err := ioutil.ReadFile(file)
+
+	if err != nil {
+		log.Fatalf("unable to open %s: %v", file, err)
+		os.Exit(1)
+	}
+
+	var v composerLock
+	json.Unmarshal(jsonData, &v)
+
+	for _, val := range v.Packages {
+		advisories, err := database.Vulnerable(val.Name, val.Version)
+
+		if err != nil {
+			log.Warnf("got error checking %s: %v\n", val.Name, err)
+			continue
+		}
+
+		if len(advisories) > 0 {
+			vulnerable = true
+			fmt.Printf("package %s (%s) is vulnerable\n", val.Name, val.Version)
+			for _, adv := range advisories {
+				fmt.Printf("\t%s (%s)\n", adv.CVE, adv.Link)
+			}
+		}
+	}
+
+	return vulnerable
 }
 
 func cronsync(where string, interval time.Duration) {
@@ -317,39 +309,14 @@ func cronsync(where string, interval time.Duration) {
 func fetchRepo(where string) error {
 	log.Debug("fetching")
 
-	cloneOptions := &git.CloneOptions{}
+	// cloneOptions := &git.CloneOptions{}
 
-	cloneOptions.FetchOptions = &git.FetchOptions{
-		RemoteCallbacks: git.RemoteCallbacks{},
-	}
+	// cloneOptions.FetchOptions = &git.FetchOptions{
+	// 	RemoteCallbacks: git.RemoteCallbacks{},
+	// }
 
-	repo, err := git.OpenRepository(where)
-	remote, err := repo.Remotes.Lookup("origin")
-	err = remote.Fetch([]string{}, cloneOptions.FetchOptions, "")
-
-	if err != nil {
-		return err
-	}
-
-	err = repo.SetHead("refs/remotes/origin/master")
-
-	if err != nil {
-		return err
-	}
-
-	err = repo.CheckoutHead(&git.CheckoutOpts{Strategy: git.CheckoutForce})
-
-	if err != nil {
-		return err
-	}
-
-	idx, err := repo.Index()
-
-	if err != nil {
-		return err
-	}
-
-	err = idx.Write()
+	repo, err := git.PlainOpen(where)
+	repo.Fetch(&git.FetchOptions{})
 
 	if err != nil {
 		return err
@@ -361,19 +328,9 @@ func fetchRepo(where string) error {
 		return err
 	}
 
-	tip, err := repo.LookupCommit(head.Target())
+	sha1 = head.Hash().String()
 
-	if err != nil {
-		return err
-	}
-
-	sha1, err = tip.ShortId()
-
-	if err != nil {
-		return err
-	}
-
-	log.Debugf("tip is %s at %s", head.Shorthand(), sha1)
+	log.Debugf("tip is at %s with sha1 %s", head.Name(), sha1)
 	log.Debug("fetch done")
 
 	return nil
@@ -383,12 +340,10 @@ func clone(uri string, where string) {
 	log.Infof("CVEs source set to %s", uri)
 	log.Infof("cloning CVEs in %s", where)
 
-	cloneOptions := &git.CloneOptions{}
-
-	cloneOptions.FetchOptions = &git.FetchOptions{
-		RemoteCallbacks: git.RemoteCallbacks{},
-	}
-	_, err := git.Clone(uri, where, cloneOptions)
+	// Clones the repository into the given dir, just as a normal git clone does
+	_, err := git.PlainClone(where, false, &git.CloneOptions{
+		URL: uri,
+	})
 
 	if err != nil {
 		log.Panic(err)
