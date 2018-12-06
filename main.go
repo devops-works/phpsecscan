@@ -31,7 +31,8 @@ import (
 //         versions: ['>=5', '<5.3.1']
 // reference: composer://guzzlehttp/guzzle
 
-type fofSecurityAdvisory struct {
+// FoFSecurityAdvisory holds a FriendsOfSymfony advisory
+type FoFSecurityAdvisory struct {
 	Title    string `yaml:"title"`
 	Link     string `yaml:"link"`
 	CVE      string `yaml:"cve"`
@@ -72,7 +73,7 @@ type composerLock struct {
 	} `json:"packages"`
 }
 
-var database *vulnDatabase
+var database *VulnDatabase
 var sha1 string
 
 // could be cool to use it as a:
@@ -153,17 +154,21 @@ func main() {
 		json.Unmarshal(jsonData, &v)
 
 		for _, val := range v.Packages {
-			status, err := database.Vulnerable(val.Name, val.Version)
-
-			log.Debugf("package %s (%s) is %t\n", val.Name, val.Version, status)
+			advisories, err := database.Vulnerable(val.Name, val.Version)
 
 			if err != nil {
 				log.Warnf("got error checking %s: %v\n", val.Name, err)
 				continue
 			}
 
-			if status == true {
+			if len(advisories) > 0 {
 				fmt.Printf("package %s (%s) is vulnerable\n", val.Name, val.Version)
+				for _, adv := range advisories {
+					fmt.Printf("\t%s (%s)\n", adv.CVE, adv.Link)
+					// for _, br := range adv.Branches {
+					// 	fmt.Printf("\t\tversion %s\n", strings.Join(br.Versions, ","))
+					// }
+				}
 			}
 		}
 
@@ -239,21 +244,44 @@ func checkHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	response := ""
+	// response = s[:sz-1]
+
 	for _, val := range complock.Packages {
-		status, err := database.Vulnerable(val.Name, val.Version)
+		advisories, err := database.Vulnerable(val.Name, val.Version)
 
 		if err != nil {
 			continue
 		}
 
-		message := fmt.Sprintf("package %s (%s) is %t\n", val.Name, val.Version, status)
-		log.Debug(message)
+		if len(advisories) > 0 {
+			// We have vulnerabilities for this package
+			// Initialize package entry in response
+			response += `{ "package": "` + val.Name + `", "vulnerable": true, "cve": [`
 
-		if status {
-			message := fmt.Sprintf("package %s (%s) is vulnerable\n", val.Name, val.Version)
-			w.Write([]byte(message))
+			for _, adv := range advisories {
+				//	fmt.Printf("\t%s (%s)\n", adv.CVE, adv.Link)
+				response += `{ "id": "` + adv.CVE + `", "title": "` + adv.Title + `", "link": "` + adv.Link + `"},`
+			}
+			// For the last iteration, remove the trailing ','
+			response = response[:len(response)-1]
+
+			// For the last iteration, close json array and package object
+			response += `] },`
 		}
+
 	}
+
+	if len(response) > 0 {
+		// We have vulnerabilities
+		// So remove the trailing ',' for the last iteration and enclose vulnerabilities list
+		response = response[:len(response)-1]
+		response = `{  "vulnerable": true, "vulnerabilities": [ ` + response + ` ] }`
+	} else {
+		response = `{ "vulnerable": false }`
+	}
+
+	w.Write([]byte(response))
 }
 
 func cronsync(where string, interval time.Duration) {
@@ -367,7 +395,7 @@ func clone(uri string, where string) {
 	}
 }
 
-func createDb(repos string) (*vulnDatabase, error) {
+func createDb(repos string) (*VulnDatabase, error) {
 	fileList := []string{}
 	db := NewDatabase()
 
@@ -391,7 +419,7 @@ func createDb(repos string) (*vulnDatabase, error) {
 
 		log.Debugf("parsing file %s", file)
 
-		var dec fofSecurityAdvisory
+		var dec FoFSecurityAdvisory
 
 		decoder := yaml.NewDecoder(f)
 		err = decoder.Decode(&dec)
@@ -400,12 +428,8 @@ func createDb(repos string) (*vulnDatabase, error) {
 			return nil, err
 		}
 
-		for _, v := range dec.Branches {
-			key := strings.Replace(dec.Reference, "composer://", "", 1)
-
-			log.Debugf("adding versions %v for %s", v.Versions, key)
-			db.AddSpec(key, v.Versions)
-		}
+		key := strings.Replace(dec.Reference, "composer://", "", 1)
+		db.AddVulnerability(key, dec)
 	}
 
 	return db, nil

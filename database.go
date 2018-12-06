@@ -9,65 +9,69 @@ import (
 	version "github.com/hashicorp/go-version"
 )
 
-type versionSpecs struct {
-	constraint string
-}
-
-type vulnSpec []versionSpecs
-
-type vulnDatabase struct {
+// VulnDatabase is a map of FoFSecurityAdvisory list
+// Each key is a package name, and contains a FoFSecurityAdvisory list
+type VulnDatabase struct {
 	sync.Mutex
-	specs map[string]vulnSpec
+	packages map[string][]FoFSecurityAdvisory
 }
 
 // NewDatabase returns an empty vulnerabilities database
-func NewDatabase() *vulnDatabase {
-	return &vulnDatabase{
-		specs: make(map[string]vulnSpec),
+func NewDatabase() *VulnDatabase {
+	return &VulnDatabase{
+		packages: make(map[string][]FoFSecurityAdvisory),
 	}
 }
 
-// AddSpec adds vulnerable version bounds for a package
-func (db *vulnDatabase) AddSpec(key string, constraint []string) {
+// AddVulnerability adds vulnerable version bounds for a package
+func (db *VulnDatabase) AddVulnerability(key string, vuln FoFSecurityAdvisory) {
 	db.Lock()
 	defer db.Unlock()
 
-	log.Debugf("adding spec for %s: %v", key, constraint)
+	log.Debugf("adding vulnerability for %s", key)
 
 	// If package is unknown, create it's structure
-	if _, ok := db.specs[key]; !ok {
-		db.specs[key] = vulnSpec{}
+	if _, ok := db.packages[key]; !ok {
+		db.packages[key] = []FoFSecurityAdvisory{}
 	}
 
-	db.specs[key] = append(db.specs[key], versionSpecs{strings.Join(constraint, ",")})
+	db.packages[key] = append(db.packages[key], vuln)
 }
 
 // Vulnerable returns true if package is vulnerable, false otherwise.
-func (db *vulnDatabase) Vulnerable(pkg, vrs string) (bool, error) {
+func (db *VulnDatabase) Vulnerable(pkg, vrs string) ([]FoFSecurityAdvisory, error) {
 	db.Lock()
 	defer db.Unlock()
 
 	v, err := version.NewVersion(vrs)
 
 	if err != nil {
-		return true, err
+		return nil, err
 	}
 	// When pkg is not in the database, we
-	if _, ok := db.specs[pkg]; !ok {
-		return false, nil
+	if _, ok := db.packages[pkg]; !ok {
+		return nil, nil
 	}
 
-	for _, sp := range db.specs[pkg] {
-		constraints, err := version.NewConstraint(sp.constraint)
+	var advisories []FoFSecurityAdvisory
 
-		if err != nil {
-			return true, err
-		}
+	// We have multiple advisories per package, don't forget that !
+	for _, adv := range db.packages[pkg] {
+		// and multiple branches per advisories
+		for _, br := range adv.Branches {
+			constraints, err := version.NewConstraint(strings.Join(br.Versions, ","))
 
-		if constraints.Check(v) {
-			return true, nil
+			if err != nil {
+				return advisories, err
+			}
+
+			if constraints.Check(v) {
+				// could be nice to propose versions !
+				advisories = append(advisories, adv)
+			}
+			// }
 		}
 	}
 
-	return false, nil
+	return advisories, nil
 }
