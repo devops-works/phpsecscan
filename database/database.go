@@ -1,4 +1,4 @@
-package main
+package database
 
 import (
 	"strings"
@@ -8,6 +8,18 @@ import (
 
 	version "github.com/hashicorp/go-version"
 )
+
+// FoFSecurityAdvisory holds a FriendsOfSymfony advisory
+type FoFSecurityAdvisory struct {
+	Title    string `yaml:"title"`
+	Link     string `yaml:"link"`
+	CVE      string `yaml:"cve"`
+	Branches map[string]struct {
+		Time     string   `yaml:"time"`
+		Versions []string `yaml:"versions"`
+	} `yaml:"branches"`
+	Reference string `yaml:"reference"`
+}
 
 // VulnDatabase is a map of FoFSecurityAdvisory list
 // Each key is a package name, and contains a FoFSecurityAdvisory list

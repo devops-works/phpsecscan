@@ -14,17 +14,17 @@ Usage:
 
 ```bash
 phpsecscan
-    -port 8000
-    -repo https://github.com/FriendsOfPHP/security-advisories.git
-    -gitdir /tmp/XYZ
-    -interval 600
-    file
+    [-port 8000]
+    [-repo https://github.com/FriendsOfPHP/security-advisories.git]
+    [-gitdir /tmp/XYZ]
+    [-interval 600]
+    [file]
 ```
 
 Options:
 
 - `gitdir` (defaults to some random temp dir): path to store CVE git checkout
-- `h` or `-help`: help usage
+- `h` or `help`: help usage
 - `port` (default "8080"): server port
 - `repo` (default "https://github.com/FriendsOfPHP/security-advisories.git"): CVE repository URL
 - `server` (default false): start as a web server
@@ -43,3 +43,19 @@ Options:
 ```bash
 curl localhost:8080/check --data @/path/to/project/composer.lock
 ```
+
+## TODO
+
+- github app
+- gitlab app
+- Vue.js front end
+
+
+## See also
+
+https://github.com/sensiolabs/security-checker
+https://snyk.io/docs/snyk-for-php
+https://github.com/marketplace/sonatype-depshield
+https://ossindex.sonatype.org/
+
+pkg:bitbucket/birkenfeld/pygments-main@244fd47e07d1014f0aed9c
