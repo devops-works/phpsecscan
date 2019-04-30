@@ -6,6 +6,23 @@ compiled](https://github.com/FriendsOfPHP/security-advisories) by FriendsOfPHP.
 It will analyze your `composer.lock` file and show if some versions are
 affected by a vulnerability.
 
+## Build
+
+### Local
+
+```bash
+make
+```
+
+### Docker
+
+```bash
+export VERSION=$(git describe --tags --always)
+docker build . -t name/phpsecscan:${VERSION}
+docker tag name/phpsecscan:${VERSION} name/phpsecscan:latest
+```
+
+
 ## Command line usage
 
 Can be run standalone of as a server.
@@ -46,10 +63,9 @@ curl localhost:8080/check --data @/path/to/project/composer.lock
 
 ## TODO
 
-- github app
-- gitlab app
-- Vue.js front end
-
+- [ ] github app
+- [ ] gitlab app
+- [ ] Vue.js front end
 
 ## See also
 
@@ -57,5 +73,3 @@ https://github.com/sensiolabs/security-checker
 https://snyk.io/docs/snyk-for-php
 https://github.com/marketplace/sonatype-depshield
 https://ossindex.sonatype.org/
-
-pkg:bitbucket/birkenfeld/pygments-main@244fd47e07d1014f0aed9c
