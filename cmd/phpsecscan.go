@@ -1,17 +1,18 @@
 package main
 
 import (
-  db "phpsecscan/database"
-  stats "phpsecscan/statsd"
 	"encoding/json"
 	"fmt"
-  "io"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	db "phpsecscan/database"
+	stats "phpsecscan/statsd"
 
 	flag "github.com/namsral/flag"
 	log "github.com/sirupsen/logrus"
@@ -52,6 +53,8 @@ type composerLock struct {
 
 var database *db.VulnDatabase
 var sha1 string
+var version string
+var builddate string
 
 func main() {
 	var err error
@@ -64,7 +67,7 @@ func main() {
 	flag.StringVar(&serverPort, "port", "8080", "Server port")
 	flag.StringVar(&uri, "repo", "https://github.com/FriendsOfPHP/security-advisories.git", "CVE repository")
 	flag.IntVar(&syncInterval, "interval", 600, "Interval between CVE repository sync")
-  flag.StringVar(&statsdServer, "statsd", "", "URL for statsd server (e.g. 127.0.0.1:8025)")
+	flag.StringVar(&statsdServer, "statsd", "", "URL for statsd server (e.g. 127.0.0.1:8025)")
 	flag.BoolVar(&help, "help", false, "Help usage")
 	flag.BoolVar(&help, "h", false, "Help usage")
 
@@ -82,10 +85,10 @@ func main() {
 		setupLogging(log.InfoLevel)
 	}
 
-  // Setup metrics
-  if statsdServer != "" {
-    stats.Open(statsdServer)
-  }
+	// Setup metrics
+	if statsdServer != "" {
+		stats.Open(statsdServer)
+	}
 
 	// If gitDirectory is not set, get a temporary directory
 	// because we still need to checkkout somewhere
@@ -153,7 +156,7 @@ func webserver(port string) {
 }
 
 func statusHandler(w http.ResponseWriter, r *http.Request) {
-	message := fmt.Sprintf(`{ "sha1": "%s" }`, sha1)
+	message := fmt.Sprintf(`{ "dbsha1": "%s", "version": "%s", "build_date": "%s"}`, sha1, version, builddate)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(message))
 }
@@ -164,8 +167,7 @@ func reflectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-  io.Copy(w,r.Body)
-
+	io.Copy(w, r.Body)
 
 	return
 }
@@ -173,7 +175,14 @@ func reflectHandler(w http.ResponseWriter, r *http.Request) {
 func checkHandler(w http.ResponseWriter, r *http.Request) {
 	log.Debugf("checking composer.lock for %s", r.RemoteAddr)
 
+	t := time.Now()
+	defer func() {
+		stats.Time("checks.timetaken", time.Since(t))
+		stats.Count("checks.total", 1)
+	}()
+
 	if r.Method != http.MethodPost {
+		stats.Count("checks.failed.method", 1)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
@@ -187,6 +196,7 @@ func checkHandler(w http.ResponseWriter, r *http.Request) {
 		log.Errorf("error decoding body from %s: %v", r.RemoteAddr, err)
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(`{"error": "malformed request" }`))
+		stats.Count("checks.failed.decode", 1)
 		return
 	}
 
@@ -223,11 +233,16 @@ func checkHandler(w http.ResponseWriter, r *http.Request) {
 		// So remove the trailing ',' for the last iteration and enclose vulnerabilities list
 		response = response[:len(response)-1]
 		response = `{  "vulnerable": true, "version": "` + sha1 + `", "vulnerabilities": [ ` + response + ` ] }`
+		stats.Count("checks.success.vulnerable", 1)
+		log.Info("lock file is vulnerable")
 	} else {
 		response = `{ "vulnerable": false, "version": "` + sha1 + `" }`
+		stats.Count("checks.success.notvulnerable", 1)
+		log.Info("lock file is not vulnerable")
 	}
 
 	w.Write([]byte(response))
+	log.Debugf("check done in %d ms", time.Since(t)/time.Millisecond)
 }
 
 func fileIsVulnerable(file string) bool {
@@ -293,13 +308,12 @@ func cronsync(where string, interval time.Duration) {
 }
 
 func fetchRepo(where string) error {
-	log.Debug("fetching database at %s", where)
+	log.Debugf("fetching database at %s", where)
 
-	// cloneOptions := &git.CloneOptions{}
-
-	// cloneOptions.FetchOptions = &git.FetchOptions{
-	// 	RemoteCallbacks: git.RemoteCallbacks{},
-	// }
+	t := time.Now()
+	defer func() {
+		stats.Time("fetch.timetaken", time.Since(t))
+	}()
 
 	repo, err := git.PlainOpen(where)
 	repo.Fetch(&git.FetchOptions{})
@@ -317,7 +331,7 @@ func fetchRepo(where string) error {
 	sha1 = head.Hash().String()
 
 	log.Debugf("tip is at %s with sha1 %s", head.Name(), sha1)
-	log.Debug("fetch done")
+	log.Debugf("fetch done in %d ms", time.Since(t)/time.Millisecond)
 
 	return nil
 }
@@ -339,6 +353,8 @@ func clone(uri string, where string) {
 	if err != nil {
 		log.Panic(err)
 	}
+
+	log.Debugf("clone done in %d ms", time.Since(t)/time.Millisecond)
 }
 
 func createDb(repos string) (*db.VulnDatabase, error) {
@@ -378,5 +394,7 @@ func createDb(repos string) (*db.VulnDatabase, error) {
 		vdb.AddVulnerability(key, dec)
 	}
 
+	log.Infof("database contains %d vulnerabilities", len(fileList))
+	stats.Gauge("database.vulnerabilities", len(fileList))
 	return vdb, nil
 }

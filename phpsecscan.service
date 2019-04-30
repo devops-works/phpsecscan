@@ -1,0 +1,20 @@
+[Unit]
+Description=PHP Security Scanner
+After=network-online.target
+ 
+[Service]
+Type=simple
+ 
+User=ubuntu
+Group=ubuntu
+UMask=007
+ 
+ExecStart=/usr/local/bin/phpsecscan -gitdir /home/ubuntu/cve -debug
+ 
+Restart=on-failure
+ 
+# Configures the time to wait before service is stopped forcefully.
+TimeoutStopSec=10
+ 
+[Install]
+WantedBy=multi-user.target

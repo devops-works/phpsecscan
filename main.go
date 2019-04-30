@@ -1,15 +1,15 @@
 package main
 
 import (
-  db "phpsecscan/database"
-  stats "phpsecscan/statsd"
 	"encoding/json"
 	"fmt"
-  "io"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
+	db "phpsecscan/database"
+	stats "phpsecscan/statsd"
 	"strings"
 	"time"
 
@@ -64,7 +64,7 @@ func main() {
 	flag.StringVar(&serverPort, "port", "8080", "Server port")
 	flag.StringVar(&uri, "repo", "https://github.com/FriendsOfPHP/security-advisories.git", "CVE repository")
 	flag.IntVar(&syncInterval, "interval", 600, "Interval between CVE repository sync")
-  flag.StringVar(&statsdServer, "statsd", "", "URL for statsd server (e.g. 127.0.0.1:8025)")
+	flag.StringVar(&statsdServer, "statsd", "", "URL for statsd server (e.g. 127.0.0.1:8025)")
 	flag.BoolVar(&help, "help", false, "Help usage")
 	flag.BoolVar(&help, "h", false, "Help usage")
 
@@ -82,10 +82,10 @@ func main() {
 		setupLogging(log.InfoLevel)
 	}
 
-  // Setup metrics
-  if statsdServer != "" {
-    stats.Open(statsdServer)
-  }
+	// Setup metrics
+	if statsdServer != "" {
+		stats.Open(statsdServer)
+	}
 
 	// If gitDirectory is not set, get a temporary directory
 	// because we still need to checkkout somewhere
@@ -164,14 +164,22 @@ func reflectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-  io.Copy(w,r.Body)
-
+	io.Copy(w, r.Body)
 
 	return
 }
 
 func checkHandler(w http.ResponseWriter, r *http.Request) {
-	log.Debugf("checking composer.lock for %s", r.RemoteAddr)
+	remote := r.Header.Get("X-Forwarded-For")
+
+	if remote == "" {
+		log.Debugf("X-Forwarded-For is not set")
+		remote = r.RemoteAddr
+	} else {
+		log.Debugf("X-Forwarded-For is set to %s", r.Header.Get("X-Forwarded-For"))
+	}
+
+	log.Debugf("checking composer.lock for %s", remote)
 
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
