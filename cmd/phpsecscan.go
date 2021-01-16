@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	db "phpsecscan/database"
-	stats "phpsecscan/statsd"
+	db "github.com/devops-works/phpsecscan/database"
+	stats "github.com/devops-works/phpsecscan/statsd"
 
 	flag "github.com/namsral/flag"
 	log "github.com/sirupsen/logrus"
@@ -54,7 +54,7 @@ type composerLock struct {
 var database *db.VulnDatabase
 var sha1 string
 var version string
-var builddate string
+var buildDate string
 
 func main() {
 	var err error
@@ -84,6 +84,8 @@ func main() {
 	} else {
 		setupLogging(log.InfoLevel)
 	}
+
+	log.Infof("version %s (built %s) starting", version, buildDate)
 
 	// Setup metrics
 	if statsdServer != "" {
@@ -156,7 +158,7 @@ func webserver(port string) {
 }
 
 func statusHandler(w http.ResponseWriter, r *http.Request) {
-	message := fmt.Sprintf(`{ "dbsha1": "%s", "version": "%s", "build_date": "%s"}`, sha1, version, builddate)
+	message := fmt.Sprintf(`{ "dbsha1": "%s", "version": "%s", "build_date": "%s"}`, sha1, version, buildDate)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(message))
 }

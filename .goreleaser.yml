@@ -1,0 +1,29 @@
+before:
+  hooks:
+    - go mod download
+    - go generate ./...
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    ldflags:
+     - "-s -w -X gitlab.com/devops-works/phpsecscan/cmd.version={{.Version}} -X gitlab.com/devops-works/phpsecscan/cmd.buildDate={{.CommitDate}}"
+    ignore:
+      - goos: darwin
+        goarch: 386
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ .Tag }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'

@@ -17,11 +17,10 @@ make
 ### Docker
 
 ```bash
-export VERSION=$(git describe --tags --always)
-docker build . -t name/phpsecscan:${VERSION}
+export VERSION=$(git describe --tags --always --dirty)
+docker build . -t name/phpsecscan:${VERSION} --build-arg version=${VERSION} --build-date=$(date -u '+%Y%m%d.%H%M%S')
 docker tag name/phpsecscan:${VERSION} name/phpsecscan:latest
 ```
-
 
 ## Command line usage
 
@@ -49,7 +48,13 @@ Options:
 
 ## Example
 
-### Staring the server
+### Single run mode
+
+```bash
+./phpsecscan composer.lock
+```
+
+### Starting the server
 
 ```bash
 ./phpsecscan -gitdir ./cve
@@ -66,6 +71,7 @@ curl localhost:8080/check --data @/path/to/project/composer.lock
 - [ ] github app
 - [ ] gitlab app
 - [ ] Vue.js front end
+- [ ] prometheus exporter
 
 ## See also
 

@@ -1,3 +1,5 @@
+# Example unit file for phpsecscan
+
 [Unit]
 Description=PHP Security Scanner
 After=network-online.target
