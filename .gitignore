@@ -3,3 +3,4 @@ phpsecscan
 app.yaml
 .gcloudignore
 /cve/
+/dist/

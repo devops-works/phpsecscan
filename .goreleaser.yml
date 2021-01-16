@@ -1,7 +1,8 @@
 before:
   hooks:
     - go mod download
-    - go generate ./...
+    # - go generate ./...
+
 builds:
   - env:
       - CGO_ENABLED=0
@@ -9,8 +10,9 @@ builds:
       - linux
       - windows
       - darwin
+    main: ./cmd
     ldflags:
-     - "-s -w -X gitlab.com/devops-works/phpsecscan/cmd.version={{.Version}} -X gitlab.com/devops-works/phpsecscan/cmd.buildDate={{.CommitDate}}"
+     - "-s -w -X github.com/devops-works/phpsecscan/cmd.version={{.Version}} -X github.com/devops-works/phpsecscan/cmd.buildDate={{.CommitDate}}"
     ignore:
       - goos: darwin
         goarch: 386
