@@ -1,4 +1,4 @@
-FROM devopsworks/golang-upx:1.15 as builder
+FROM devopsworks/golang-upx:1.17 as builder
 
 ARG version
 ARG builddate
@@ -45,33 +45,11 @@ RUN apt-get update && \
 
 RUN update-ca-certificates
 
+COPY --from=builder /go/bin/phpsecscan /usr/local/bin/phpsecscan
+
 EXPOSE 8000
 
 USER phpsecscanner
 
-ENTRYPOINT ["/app/body-replacer"]
-
-# Distroless alternative
-
-# FROM gcr.io/distroless/base
-
-# EXPOSE 8000
-
-# COPY --from=builder /go/bin/phpsecscan /usr/local/bin/
-# COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-# COPY --from=builder /tmp/.keep /tmp/.keep
-
-# ENTRYPOINT ["/usr/local/bin/phpsecscan"]
-
-# Scratch alternative
-
-# FROM scratch
-
-# EXPOSE 8000
-
-# COPY --from=builder /go/bin/phpsecscan /usr/local/bin/
-# COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-# COPY --from=builder /tmp/.keep /tmp/.keep
-
-# ENTRYPOINT ["/usr/local/bin/phpsecscan"]
+ENTRYPOINT ["/usr/local/bin/phpsecscan"]
 

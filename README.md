@@ -6,6 +6,14 @@ compiled](https://github.com/FriendsOfPHP/security-advisories) by FriendsOfPHP.
 It will analyze your `composer.lock` file and show if some versions are
 affected by a vulnerability.
 
+## Install
+
+You can install `phpsecscan` using:
+
+- binenv (https://github.com/devops-works/binenv)
+- using binaries in the [releases page](https://github.com/devops-works/phpsecscan/releases)
+- using the docker image (https://hub.docker.com/repository/docker/devopsworks/phpsecscan)
+
 ## Build
 
 ### Local
@@ -18,11 +26,13 @@ make
 
 ```bash
 export VERSION=$(git describe --tags --always --dirty)
-docker build . -t name/phpsecscan:${VERSION} --build-arg version=${VERSION} --build-date=$(date -u '+%Y%m%d.%H%M%S')
+docker build . -t name/phpsecscan:${VERSION} --build-arg version=${VERSION} --build-arg builddate=$(date -u '+%Y%m%d.%H%M%S')
 docker tag name/phpsecscan:${VERSION} name/phpsecscan:latest
 ```
 
-## Command line usage
+## Usage
+
+### Command line usage
 
 Can be run standalone of as a server.
 
@@ -45,6 +55,12 @@ Options:
 - `repo` (default "https://github.com/FriendsOfPHP/security-advisories.git"): CVE repository URL
 - `server` (default false): start as a web server
 - `interval` (default 600): refresh interval to sync CVEs
+
+### Docker
+
+```bash
+docker run -v /path/to/composer.lock:/composer.lock devopsworks/phpsecscan /composer.lock
+```
 
 ## Example
 
