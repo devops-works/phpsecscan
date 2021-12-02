@@ -9,9 +9,9 @@ import (
 func TestAddSpec(t *testing.T) {
 	testdb := NewDatabase()
 
-	testdb.AddSpec("foo/bar", []string{">=1.0", "<1.9"})
+	addSpec(testdb, "foo/bar", []string{">=1.0", "<1.9"})
 
-	if len(testdb.specs) != 1 {
+	if len(testdb.packages) != 1 {
 		t.Error("wrong db size after element has been added")
 	}
 
@@ -39,15 +39,33 @@ func TestCheckSpec(t *testing.T) {
 
 	for _, tc := range cases {
 		testdb := NewDatabase()
-		testdb.AddSpec("foo/bar", strings.Split(tc.constraint, ","))
+		addSpec(testdb, "foo/bar", strings.Split(tc.constraint, ","))
 		vuln, err := testdb.Vulnerable("foo/bar", tc.version)
 		// t.Logf("version %s is %t", tc.version, vuln)
 		if err != nil {
-			t.Fatal("unexpected error")
+			t.Fatalf("unexpected error %v", err)
 		}
-		if vuln != tc.expected {
-			t.Errorf("foo/bat version %s should be %t", tc.version, tc.expected)
+		if (len(vuln) != 0) != tc.expected {
+			t.Errorf("foo/bat version %s should be %t (len(vuln) is %d, len(vuln) != 0 is %t, tc.expected is %t)",
+				tc.version, tc.expected, len(vuln), len(vuln) != 0, tc.expected)
 		}
 	}
+}
 
+func addSpec(db *VulnDatabase, key string, versions []string) {
+	if _, ok := db.packages[key]; !ok {
+		db.packages[key] = []FoFSecurityAdvisory{}
+	}
+
+	vuln := FoFSecurityAdvisory{
+		Branches: map[string]struct {
+			Time     string   `yaml:"time"`
+			Versions []string `yaml:"versions"`
+		}{},
+	}
+	master := vuln.Branches["master"]
+	master.Versions = versions
+	vuln.Branches["master"] = master
+
+	db.packages[key] = append(db.packages[key], vuln)
 }
