@@ -49,7 +49,7 @@ COPY --from=builder /go/bin/phpsecscan /usr/local/bin/phpsecscan
 
 EXPOSE 8000
 
-USER phpsecscanner
+# USER phpsecscanner
 
 ENTRYPOINT ["/usr/local/bin/phpsecscan"]
 
