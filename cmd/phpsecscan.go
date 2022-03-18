@@ -377,9 +377,8 @@ func createDb(repos string) (*db.VulnDatabase, error) {
 	for _, file := range fileList {
 		f, err := os.Open(file)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("unable to open %s: %v", file, err)
 		}
-		defer f.Close()
 
 		log.Debugf("parsing file %s", file)
 
@@ -394,6 +393,7 @@ func createDb(repos string) (*db.VulnDatabase, error) {
 
 		key := strings.Replace(dec.Reference, "composer://", "", 1)
 		vdb.AddVulnerability(key, dec)
+		f.Close()
 	}
 
 	log.Infof("database contains %d vulnerabilities", len(fileList))

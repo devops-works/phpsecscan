@@ -4,3 +4,4 @@ app.yaml
 .gcloudignore
 /cve/
 /dist/
+.go-version
