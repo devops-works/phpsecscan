@@ -22,7 +22,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v3
         with:
-          images: devopsworks/golang-upx
+          images: devopsworks/phpsecscan
           tags: |
             type=raw,value=latest
             type=ref,event=tag
