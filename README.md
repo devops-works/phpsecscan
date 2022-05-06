@@ -12,7 +12,7 @@ You can install `phpsecscan` using:
 
 - binenv (https://github.com/devops-works/binenv)
 - using binaries in the [releases page](https://github.com/devops-works/phpsecscan/releases)
-- using the docker image (https://hub.docker.com/repository/docker/devopsworks/phpsecscan)
+- using the docker image (https://hub.docker.com/r/devopsworks/phpsecscan)
 
 ## Build
 
