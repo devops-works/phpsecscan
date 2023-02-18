@@ -10,9 +10,11 @@ builds:
       - linux
       - windows
       - darwin
+      - freebsd
+      - openbsd
     main: ./cmd
     ldflags:
-     - "-s -w -X github.com/devops-works/phpsecscan/cmd.version={{.Version}} -X github.com/devops-works/phpsecscan/cmd.buildDate={{.CommitDate}}"
+      - "-s -w -X github.com/devops-works/phpsecscan/main.version={{.Version}} -X github.com/devops-works/phpsecscan/main.buildDate={{.CommitDate}}"
     ignore:
       - goos: darwin
         goarch: 386
