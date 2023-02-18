@@ -12,6 +12,9 @@ import (
 
 	db "github.com/devops-works/phpsecscan/database"
 	stats "github.com/devops-works/phpsecscan/statsd"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	flag "github.com/namsral/flag"
 	log "github.com/sirupsen/logrus"
@@ -55,10 +58,57 @@ const (
 	TEXT = "text"
 )
 
-var database *db.VulnDatabase
-var sha1 string
-var version string
-var buildDate string
+var (
+	database  *db.VulnDatabase
+	sha1      string
+	version   string
+	buildDate string
+
+	checksProcessed = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "phpsecscan_processed_checks",
+		Help: "The total number of processed composer.lock check requests",
+	})
+
+	checksVulnerable = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "phpsecscan_processed_vulnerable",
+		Help: "The total number of vulnerable composer.lock found",
+	})
+
+	checksNotVulnerable = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "phpsecscan_processed_notvulnerable",
+		Help: "The total number of not vulnerable composer.lock found",
+	})
+
+	checksVulnerabilitiesfound = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "phpsecscan_processed_vulnerabilities_found",
+		Help: "The total number of vulnerabilities found in composer.lock",
+	})
+
+	checkDuration = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "phpsecscan_check_duration_ms",
+		Help: "Time taken to check compose.json in ms",
+	})
+
+	clonesIssued = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "phpsecscan_clones_issued",
+		Help: "The total number of CVE repository refreshes",
+	})
+
+	clonesFailed = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "phpsecscan_clones_failed",
+		Help: "The total number of CVE repository clone failed",
+	})
+
+	clonesDuration = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "phpsecscan_clones_duration_ms",
+		Help: "Time taken to clone the CVE repository in ms",
+	})
+
+	cveCount = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "phpsecscan_cve",
+		Help: "The current number of CVE in database",
+	})
+)
 
 func main() {
 	var err error
@@ -139,6 +189,7 @@ func main() {
 	}
 
 	log.Info("webserver mode")
+
 	cronsync(gitDirectory, time.Duration(syncInterval)*time.Second)
 	webserver(":" + serverPort)
 }
@@ -168,6 +219,7 @@ func webserver(port string) {
 	http.HandleFunc("/status", statusHandler)
 	http.HandleFunc("/check", checkHandler)
 	http.HandleFunc("/reflect", reflectHandler)
+	http.Handle("/metrics", promhttp.Handler())
 	log.Infof("listening on port %s", port)
 	log.Fatal(http.ListenAndServe(port, nil))
 }
@@ -194,6 +246,8 @@ func checkHandler(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		stats.Time("checks.timetaken", time.Since(t))
 		stats.Count("checks.total", 1)
+		checkDuration.Set(float64(time.Since(t).Milliseconds()))
+		checksProcessed.Inc()
 	}()
 
 	if r.Method != http.MethodPost {
@@ -239,6 +293,7 @@ func checkHandler(w http.ResponseWriter, r *http.Request) {
 
 			// For the last iteration, close json array and package object
 			response += `] },`
+			checksVulnerabilitiesfound.Add(float64(len(advisories)))
 		}
 
 	}
@@ -249,10 +304,13 @@ func checkHandler(w http.ResponseWriter, r *http.Request) {
 		response = response[:len(response)-1]
 		response = `{  "vulnerable": true, "version": "` + sha1 + `", "vulnerabilities": [ ` + response + ` ] }`
 		stats.Count("checks.success.vulnerable", 1)
+		checksVulnerable.Inc()
 		log.Info("lock file is vulnerable")
+
 	} else {
 		response = `{ "vulnerable": false, "version": "` + sha1 + `" }`
 		stats.Count("checks.success.notvulnerable", 1)
+		checksNotVulnerable.Inc()
 		log.Info("lock file is not vulnerable")
 	}
 
@@ -328,6 +386,7 @@ func fetchRepo(where string) error {
 	t := time.Now()
 	defer func() {
 		stats.Time("fetch.timetaken", time.Since(t))
+		clonesDuration.Set(float64(time.Since(t) / time.Millisecond))
 	}()
 
 	repo, err := git.PlainOpen(where)
@@ -336,6 +395,8 @@ func fetchRepo(where string) error {
 	if err != nil {
 		return err
 	}
+
+	clonesIssued.Inc()
 
 	head, err := repo.Head()
 
@@ -358,6 +419,7 @@ func clone(uri string, where string) {
 	t := time.Now()
 	defer func() {
 		stats.Time("clone.timetaken", time.Since(t))
+		clonesDuration.Set(float64(time.Since(t) / time.Millisecond))
 	}()
 
 	// Clones the repository into the given dir, just as a normal git clone does
@@ -365,8 +427,12 @@ func clone(uri string, where string) {
 		URL: uri,
 	})
 
+	clonesIssued.Inc()
+
 	if err != nil {
-		log.Panic(err)
+		log.Error("unable to clone CVE repositories: %v", err)
+		clonesFailed.Inc()
+		return
 	}
 
 	log.Debugf("clone done in %d ms", time.Since(t)/time.Millisecond)
@@ -411,5 +477,6 @@ func createDb(repos string) (*db.VulnDatabase, error) {
 
 	log.Infof("database contains %d vulnerabilities", len(fileList))
 	stats.Gauge("database.vulnerabilities", len(fileList))
+	cveCount.Set(float64(len(fileList)))
 	return vdb, nil
 }
