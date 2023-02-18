@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -51,6 +50,11 @@ type composerLock struct {
 	} `json:"packages"`
 }
 
+const (
+	JSON = "json"
+	TEXT = "text"
+)
+
 var database *db.VulnDatabase
 var sha1 string
 var version string
@@ -59,12 +63,13 @@ var buildDate string
 func main() {
 	var err error
 	var help, isDebug bool
-	var gitDirectory, serverPort, uri, statsdServer string
+	var gitDirectory, serverPort, uri, statsdServer, logFormat string
 	var syncInterval int
 
 	flag.StringVar(&gitDirectory, "gitdir", "", "Path to store CVE git checkout")
 	flag.BoolVar(&isDebug, "debug", false, "Debug mode")
 	flag.StringVar(&serverPort, "port", "8080", "Server port")
+	flag.StringVar(&logFormat, "logformat", "text", "Log format (text or json)")
 	flag.StringVar(&uri, "repo", "https://github.com/FriendsOfPHP/security-advisories.git", "CVE repository")
 	flag.IntVar(&syncInterval, "interval", 600, "Interval between CVE repository sync")
 	flag.StringVar(&statsdServer, "statsd", "", "URL for statsd server (e.g. 127.0.0.1:8025)")
@@ -80,9 +85,9 @@ func main() {
 
 	// Setup logging
 	if isDebug {
-		setupLogging(log.DebugLevel)
+		setupLogging(logFormat, log.DebugLevel)
 	} else {
-		setupLogging(log.InfoLevel)
+		setupLogging(logFormat, log.InfoLevel)
 	}
 
 	log.Infof("version %s (built %s) starting", version, buildDate)
@@ -96,7 +101,7 @@ func main() {
 	// because we still need to checkkout somewhere
 	// This directory will be removed afterwards
 	if gitDirectory == "" {
-		gitDirectory, err = ioutil.TempDir("", "phpsecscan")
+		gitDirectory, err = os.MkdirTemp("", "phpsecscan")
 		log.Debugf("created temporary directory: %s", gitDirectory)
 
 		if err != nil {
@@ -138,12 +143,22 @@ func main() {
 	webserver(":" + serverPort)
 }
 
-func setupLogging(level log.Level) {
+func setupLogging(mode string, level log.Level) {
 	// Formatter
-	customFormatter := new(log.TextFormatter)
-	customFormatter.TimestampFormat = "2006-01-02 15:04:05"
-	log.SetFormatter(customFormatter)
-	customFormatter.FullTimestamp = true
+	// var customFormatter log.Formatter
+
+	// customFormatter = new(log.TextFormatter)
+
+	if mode == JSON {
+		customFormatter := new(log.JSONFormatter)
+		customFormatter.TimestampFormat = "2006-01-02 15:04:05"
+		log.SetFormatter(customFormatter)
+	} else {
+		customFormatter := new(log.TextFormatter)
+		customFormatter.TimestampFormat = "2006-01-02 15:04:05"
+		customFormatter.FullTimestamp = true
+		log.SetFormatter(customFormatter)
+	}
 
 	// Only log the warning severity or above.
 	log.SetLevel(level)
@@ -170,8 +185,6 @@ func reflectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	io.Copy(w, r.Body)
-
-	return
 }
 
 func checkHandler(w http.ResponseWriter, r *http.Request) {
@@ -249,7 +262,7 @@ func checkHandler(w http.ResponseWriter, r *http.Request) {
 
 func fileIsVulnerable(file string) bool {
 	vulnerable := false
-	jsonData, err := ioutil.ReadFile(file)
+	jsonData, err := os.ReadFile(file)
 
 	if err != nil {
 		log.Fatalf("unable to open %s: %v", file, err)
